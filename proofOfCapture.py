@@ -4,11 +4,12 @@ import argparse
 from pathlib import Path
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import rsa
 import numpy as np
 from pprint import pprint
 
 keyFolder=Path("./keys")
-outdir.mkdir(parents=True, exist_ok=True)
+
 
 def calculateChecksum(img):
     # Convert to NumPy array
@@ -41,13 +42,47 @@ def main(argv=None):
     parser.add_argument("-r", "--rawPhoto", help="path to the raw photo to sign")
     parser.add_argument("-g", "--generateKeypair", action="store_true", help="generate public/private key pair")
     parser.add_argument("-s", "--signPhoto", action="store_true", help="sign raw photo")
-    parser.add_argument("-s", "--confirmPhoto", help="sign raw photo")
+    parser.add_argument("-c", "--confirmPhoto", help="confirm photo's proof of capture")
     parser.add_argument("-o", "--outputFile", help="output file")
     parser.add_argument("-p", "--publicKeyFile", help="path to public key file")
     parser.add_argument("-pk", "--publicKey", help="public key as text")
     parser.add_argument("-k", "--printPublicKey", action="store_true", help="print public key")
-
+    
     args = parser.parse_args(argv)
+
+    if args.generateKeypair:
+        keyFolder.mkdir(parents=True, exist_ok=True)
+        # Generate private key
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+        
+        # Derive public key
+        public_key = private_key.public_key()
+        
+        # Save private key
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),  # use BestAvailableEncryption(...) if you want a passphrase
+        )
+        
+        with open(keyFolder / "private_key.pem", "wb") as f:
+            f.write(private_pem)
+            
+            # Save public key
+            public_pem = public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            
+        with open(keyFolder / "public_key.pem", "wb") as f:
+            f.write(public_pem)
+            
+        print("Saved keys to", keyFolder.resolve())
+        
+    
 
     if args.signPhoto:
         rawPhoto=args.rawPhoto
