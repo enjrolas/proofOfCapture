@@ -131,7 +131,7 @@ def main(argv=None):
             exif_data[Base.ImageDescription] = decodedSignature
 
             # 4. Save with the updated EXIF data
-            outputFilepath=signedPhotoFolder/"output.jpg"
+            outputFilepath=signedPhotoFolder/"output.png"
             img.save(outputFilepath, exif=exif_data)
             
 
