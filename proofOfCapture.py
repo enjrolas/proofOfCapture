@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from PIL import Image
 import argparse
 from pathlib import Path
@@ -29,7 +30,7 @@ def calculateChecksum(img):
     print("green checksum:  %d" % (greenChecksum))
     print("blue checksum:  %d" % (blueChecksum))
     print(checksumString)
-    return totalChecksum, redChecksum, greenChecksum, blueChecksum
+    return totalChecksum, redChecksum, greenChecksum, blueChecksum, checksumString
 
 
 
@@ -52,7 +53,7 @@ def main(argv=None):
         rawPhoto=args.rawPhoto
         print("loading photo %s" % rawPhoto)
         img=Image.open(rawPhoto)        
-        totalChecksum, redChecksum, greenChecksum, blueChecksum=calculateChecksum(img)
+        totalChecksum, redChecksum, greenChecksum, blueChecksum, checksumString=calculateChecksum(img)
 
         # load PEM-encoded private key
         with open("private_key.pem", "rb") as f:
@@ -61,7 +62,7 @@ def main(argv=None):
                 password=None
             )
             
-            message = "hello world".encode("utf-8")
+            message = checksumString.encode("utf-8")
         
             signature = private_key.sign(
                 message,
