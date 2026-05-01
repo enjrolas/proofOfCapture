@@ -13,10 +13,10 @@ from pprint import pprint
 import base64
 
 key_folder=Path("./keys")
-signedPhotoFolder=Path("./signedPhotos")
+signed_photo_folder=Path("./signedPhotos")
 
 
-def calculateChecksum(img):
+def calculate_checksum(img):
     # Convert to NumPy array
     arr = np.array(img)
     print("photo dimensions:  %s" % (arr.shape,))
@@ -26,17 +26,17 @@ def calculateChecksum(img):
     blue = arr[:, :, 2]
     
     # sum with a 16-bit accumulator
-    redChecksum = red.sum(dtype=np.uint16)
-    greenChecksum = green.sum(dtype=np.uint16)
-    blueChecksum = blue.sum(dtype=np.uint16)
-    totalChecksum = arr.sum(dtype=np.uint16)
-    checksumString="totalChecksum:%d,redChecksum:%d,greenChecksum:%d,blueChecksum:%d" % (totalChecksum, redChecksum, greenChecksum, blueChecksum)
-    print("total checksum:  %d" % (totalChecksum))
-    print("red checksum:  %d" % (redChecksum))
-    print("green checksum:  %d" % (greenChecksum))
-    print("blue checksum:  %d" % (blueChecksum))
-    print(checksumString)
-    return totalChecksum, redChecksum, greenChecksum, blueChecksum, checksumString
+    red_checksum = red.sum(dtype=np.uint16)
+    green_checksum = green.sum(dtype=np.uint16)
+    blue_checksum = blue.sum(dtype=np.uint16)
+    total_checksum = arr.sum(dtype=np.uint16)
+    checksum_string="total_checksum:%d,red_checksum:%d,green_checksum:%d,blue_checksum:%d" % (total_checksum, red_checksum, green_checksum, blue_checksum)
+    print("total checksum:  %d" % (total_checksum))
+    print("red checksum:  %d" % (red_checksum))
+    print("green checksum:  %d" % (green_checksum))
+    print("blue checksum:  %d" % (blue_checksum))
+    print(checksum_string)
+    return total_checksum, red_checksum, green_checksum, blue_checksum, checksum_string
 
 def load_existing_key(path: str) -> str:
     with open(key_folder / path, "rb") as key_file:
@@ -84,7 +84,7 @@ def show_metadata(input_path):
 def verify_photo(input_path):
     print(f"loading photo {input_path}")
     img = Image.open(input_path)
-    _, _, _, _, checksum_string = calculateChecksum(img)
+    _, _, _, _, checksum_string = calculate_checksum(img)
 
     exif_data = img.getexif()
     signature = base64.b64decode(exif_data[Base.ImageDescription])
@@ -112,7 +112,7 @@ def verify_photo(input_path):
 def sign_photo(input_path):
     print(f"loading photo {input_path}")
     img = Image.open(input_path)
-    _, _, _, _, checksum_string = calculateChecksum(img)
+    _, _, _, _, checksum_string = calculate_checksum(img)
 
     with open(key_folder / "private_key.pem", "rb") as f:
         private_key = serialization.load_pem_private_key(f.read(), password=None)
@@ -129,7 +129,7 @@ def sign_photo(input_path):
     exif_data = img.getexif()
     exif_data[Base.ImageDescription] = base64.b64encode(signature).decode()
 
-    output_path = signedPhotoFolder / "output.png"
+    output_path = signed_photo_folder / "output.png"
     img.save(output_path, exif=exif_data)
     print(f"Signed photo saved to {output_path}")
 
