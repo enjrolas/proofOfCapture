@@ -12,7 +12,7 @@ import numpy as np
 from pprint import pprint
 import base64
 
-keyFolder=Path("./keys")
+key_folder=Path("./keys")
 signedPhotoFolder=Path("./signedPhotos")
 
 
@@ -38,9 +38,122 @@ def calculateChecksum(img):
     print(checksumString)
     return totalChecksum, redChecksum, greenChecksum, blueChecksum, checksumString
 
+def load_existing_key(path: str) -> str:
+    with open(key_folder / path, "rb") as key_file:
+        return key_file.read()
 
 
-def main(argv=None):
+def generate_keypair():
+    key_folder.mkdir(parents=True, exist_ok=True)
+
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    public_key = private_key.public_key()
+
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    with open(key_folder / "private_key.pem", "wb") as f:
+        f.write(private_pem)
+
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    with open(key_folder / "public_key.pem", "wb") as f:
+        f.write(public_pem)
+
+    print("Saved keys to", key_folder.resolve())
+
+
+def show_metadata(input_path):
+    print(f"loading photo {input_path}")
+    img = Image.open(input_path)
+    exif = {
+        PIL.ExifTags.TAGS[k]: v
+        for k, v in img._getexif().items()
+        if k in PIL.ExifTags.TAGS
+    }
+    pprint(exif)
+
+
+def verify_photo(input_path):
+    print(f"loading photo {input_path}")
+    img = Image.open(input_path)
+    _, _, _, _, checksum_string = calculateChecksum(img)
+
+    exif_data = img.getexif()
+    signature = base64.b64decode(exif_data[Base.ImageDescription])
+
+    with open(key_folder / "public_key.pem", "rb") as f:
+        public_key = serialization.load_pem_public_key(f.read())
+
+    try:
+        public_key.verify(
+            signature,
+            checksum_string.encode("utf-8"),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+        print("Verification successful: The image is authentic and unmodified.")
+        return True
+    except InvalidSignature:
+        print("Verification failed: The image has been altered or the signature is invalid.")
+        return False
+
+
+def sign_photo(input_path):
+    print(f"loading photo {input_path}")
+    img = Image.open(input_path)
+    _, _, _, _, checksum_string = calculateChecksum(img)
+
+    with open(key_folder / "private_key.pem", "rb") as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None)
+
+    signature = private_key.sign(
+        checksum_string.encode("utf-8"),
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+
+    exif_data = img.getexif()
+    exif_data[Base.ImageDescription] = base64.b64encode(signature).decode()
+
+    output_path = signedPhotoFolder / "output.png"
+    img.save(output_path, exif=exif_data)
+    print(f"Signed photo saved to {output_path}")
+
+
+def main(args):
+    if args.publicKey:
+        print(load_existing_key("public_key.pem").decode())
+
+    if args.generateKeypair:
+        generate_keypair()
+
+
+    if args.signPhoto:
+        sign_photo(args.input)
+            
+
+    if args.confirmPhoto:
+        verify_photo(args.input)
+
+    if args.showMetadata:
+        show_metadata(args.input)
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="proof of capture")
 
     # 2. Add arguments
@@ -53,150 +166,5 @@ def main(argv=None):
     parser.add_argument("-pk", "--publicKey", action="store_true", help="public key as text")
     parser.add_argument("-m", "--showMetadata", action="store_true", help="show all metadata")
     
-    args = parser.parse_args(argv)
-
-    if args.publicKey:
-        with open(keyFolder / "public_key.pem", "rb") as key_file:
-            publicKey=key_file.read()
-            print(publicKey)
-            
-    if args.generateKeypair:
-        keyFolder.mkdir(parents=True, exist_ok=True)
-        # Generate private key
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-        )
-        
-        # Derive public key
-        public_key = private_key.public_key()
-        
-        # Save private key
-        private_pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),  # use BestAvailableEncryption(...) if you want a passphrase
-        )
-        
-        with open(keyFolder / "private_key.pem", "wb") as f:
-            f.write(private_pem)
-            
-            # Save public key
-            public_pem = public_key.public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            )
-            
-        with open(keyFolder / "public_key.pem", "wb") as f:
-            f.write(public_pem)
-            
-        print("Saved keys to", keyFolder.resolve())
-        
-    
-
-    if args.signPhoto:
-        inputPhoto=args.input
-        print("loading photo %s" % inputPhoto)
-        img=Image.open(inputPhoto)        
-        totalChecksum, redChecksum, greenChecksum, blueChecksum, checksumString=calculateChecksum(img)
-
-        # load PEM-encoded private key
-        with open(keyFolder /"private_key.pem", "rb") as f:
-            private_key = serialization.load_pem_private_key(
-                f.read(),
-                password=None
-            )
-            
-            message = checksumString.encode("utf-8")
-        
-            signature = private_key.sign(
-                message,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
-
-            #get all the metadata tags and build a tag dictionary
-            exif = {
-                PIL.ExifTags.TAGS[k]: v
-                for k, v in img._getexif().items()
-                if k in PIL.ExifTags.TAGS
-            }
-            
-            exif_data = img.getexif()
-            # Alternatively, use the Base enum for readability
-            decodedSignature=base64.b64encode(signature).decode()
-            exif_data[Base.ImageDescription] = decodedSignature
-
-            # 4. Save with the updated EXIF data
-            outputFilepath=signedPhotoFolder/"output.png"
-            img.save(outputFilepath, exif=exif_data)
-            
-
-    if args.confirmPhoto:
-        inputPhoto=args.input
-        print("loading photo %s" % inputPhoto)
-        img=Image.open(inputPhoto)        
-        totalChecksum, redChecksum, greenChecksum, blueChecksum, checksumString=calculateChecksum(img)
-        
-        message = checksumString.encode("utf-8")
-        exif_data = img.getexif()    
-
-        decodedSignature=exif_data[Base.ImageDescription]
-        encodedSignature=base64.b64decode(decodedSignature)
-        
-
-        #def verify_image_signature(public_key_path, image_data_path, signature_path):
-        # 1. Load the camera manufacturer's public key
-        with open(keyFolder / "public_key.pem", "rb") as key_file:
-            public_key = serialization.load_pem_public_key(
-                key_file.read()
-            )
-            
-
-            print("encoded signature:  %s" % encodedSignature)
-            print("decoded signature:  %s" % decodedSignature)
-            print("message:  %s" % message)
-            # 3. Verify the signature
-            try:
-                public_key.verify(
-                    encodedSignature,
-                    message,
-                    padding.PSS(
-                        mgf=padding.MGF1(hashes.SHA256()),
-                        salt_length=padding.PSS.MAX_LENGTH
-                    ),
-                    hashes.SHA256()
-                )
-                print("Verification successful: The image is authentic and unmodified.")
-                return True
-            
-            except InvalidSignature:
-                print("Verification failed: The image has been altered or the signature is invalid.")
-                return False
-
-    if args.showMetadata:
-        inputPhoto=args.input
-        print("loading photo %s" % inputPhoto)
-        img=Image.open(inputPhoto)        
-
-        
-        #get all the metadata tags and build a tag dictionary
-        exif = {
-            PIL.ExifTags.TAGS[k]: v
-            for k, v in img._getexif().items()
-            if k in PIL.ExifTags.TAGS
-        }
-        pprint(exif)
-        pprint(img._getexif().items())
-        
-            
-
-            
-        
-
-if __name__ == "__main__":
-    # Passing sys.argv[1:] allows for easier testing/calling from other modules
-    main()
+    args = parser.parse_args()
+    main(args)
