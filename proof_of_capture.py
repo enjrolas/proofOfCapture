@@ -134,37 +134,35 @@ def sign_photo(input_path):
     print(f"Signed photo saved to {output_path}")
 
 
-def main(args):
-    if args.publicKey:
-        print(load_existing_key("public_key.pem").decode())
+def main():
+    parser = argparse.ArgumentParser(description="proof of capture")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    if args.generateKeypair:
+    subparsers.add_parser("generate", help="generate public/private key pair")
+    subparsers.add_parser("public-key", help="print public key")
+
+    sign_parser = subparsers.add_parser("sign", help="sign a photo")
+    sign_parser.add_argument("photo", help="path to the photo to sign")
+
+    verify_parser = subparsers.add_parser("verify", help="verify a signed photo")
+    verify_parser.add_argument("photo", help="path to the signed photo")
+
+    metadata_parser = subparsers.add_parser("metadata", help="show EXIF metadata")
+    metadata_parser.add_argument("photo", help="path to the photo")
+
+    args = parser.parse_args()
+
+    if args.command == "generate":
         generate_keypair()
-
-
-    if args.signPhoto:
-        sign_photo(args.input)
-            
-
-    if args.confirmPhoto:
-        verify_photo(args.input)
-
-    if args.showMetadata:
-        show_metadata(args.input)
+    elif args.command == "public-key":
+        print(load_existing_key("public_key.pem").decode())
+    elif args.command == "sign":
+        sign_photo(args.photo)
+    elif args.command == "verify":
+        verify_photo(args.photo)
+    elif args.command == "metadata":
+        show_metadata(args.photo)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="proof of capture")
-
-    # 2. Add arguments
-    parser.add_argument("-i", "--input", help="path to the raw photo to sign")
-    parser.add_argument("-o", "--output", help="path to the raw photo to output")
-    parser.add_argument("-g", "--generateKeypair", action="store_true", help="generate public/private key pair")
-    parser.add_argument("-s", "--signPhoto", action="store_true", help="sign raw photo")
-    parser.add_argument("-c", "--confirmPhoto", action="store_true", help="confirm photo's proof of capture")
-    parser.add_argument("-p", "--publicKeyFile", help="path to public key file")
-    parser.add_argument("-pk", "--publicKey", action="store_true", help="public key as text")
-    parser.add_argument("-m", "--showMetadata", action="store_true", help="show all metadata")
-    
-    args = parser.parse_args()
-    main(args)
+    main()
