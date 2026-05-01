@@ -176,15 +176,7 @@ def main(argv=None):
             except InvalidSignature:
                 print("Verification failed: The image has been altered or the signature is invalid.")
                 return False
-                    
 
-        print("checksum string:  %s" % checksumString)
-        print("image description from the image:  %s" % exif_data[Base.ImageDescription])
-        print("base-64 decoded signature that we just calculated: %s" % decodedSignature)
-        
-
-        
-        
     if args.showMetadata:
         inputPhoto=args.input
         print("loading photo %s" % inputPhoto)
